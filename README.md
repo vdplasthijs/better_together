@@ -20,7 +20,7 @@ Code and data to reproduce all results from the paper [Better Together: Evaluati
 - Task agnostic overlap: contains CCA/CKA analysis.
 
 ## Citation:
-'''
+```
 @misc{vanderplas2026bettertogetherevaluatingcomplementarity,
       title={Better Together: Evaluating the Complementarity of Earth Embedding Models}, 
       author={Thijs L van der Plas and Jacob JW Bakermans and Vishal Nedungadi and Gabrielė Tijūnaitytė and Marc Rußwurm and Ioannis N Athanasiadis},
@@ -30,4 +30,4 @@ Code and data to reproduce all results from the paper [Better Together: Evaluati
       primaryClass={cs.CV},
       url={https://arxiv.org/abs/2605.18667}, 
 }
-'''
+```
