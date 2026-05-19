@@ -1,7 +1,7 @@
 # Better Together
 
 ## Instructions:
-- All figures and analyses were conducted from the notebooks (which use the modules). See below for details. 
+- All figures and analyses are created in the notebooks (which use the modules). See below for details. 
 - Data is included in the `data/` folder. The data is provided with a CC-BY-SA license.
 - There 2 zip files that should be unzipped in `data/geoclip/`
 - The python packages are listed in the `.yml` files (one with and one without builds).
