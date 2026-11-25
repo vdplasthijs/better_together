@@ -1,0 +1,13 @@
+*/.DS_Store
+.DS_Store
+src/__pycache__/
+
+tests/__pycache__/
+
+*.code-workspace
+
+data/geoclip/lc_stratified_sample_geoclip.csv
+
+data/geoclip/random_sample_geoclip.csv
+
+*.pyc
