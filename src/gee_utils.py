@@ -15,7 +15,7 @@ sys.path.append(os.path.join(path_dict['repo'], 'content/'))
 import data_utils as du
 from constants import DW_CLASSES
 
-ONLINE_ACCESS_TO_GEE = True 
+ONLINE_ACCESS_TO_GEE = False 
 if ONLINE_ACCESS_TO_GEE:
     import api_keys
     import ee, geemap 

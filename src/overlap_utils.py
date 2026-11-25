@@ -1,14 +1,14 @@
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
-from sklearn.metrics import r2_score
-from sklearn.model_selection import KFold, StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.decomposition import PCA, TruncatedSVD
 from statsmodels.stats.multitest import multipletests
-from scipy.stats import zscore, wilcoxon
+from scipy.stats import wilcoxon
 import os
 from tqdm import tqdm
 import data_utils as du
+import evaluation as ev
 
 
 def cap_first_letter(s):
@@ -67,107 +67,32 @@ def get_overlap_matrix(df_all, col_names, regressor_list=None, target_list=None,
 
 def get_r2_regression(df_all, col_names, regressor, target, n_splits=4, equalize_ambient_dim=False,
                       regression_method='ridge', zscore_embeddings=False):
-    df_all = df_all.copy()
-    data_regressor = df_all[col_names[regressor]].values
-    data_target = df_all[col_names[target]].values
-    # print(f"Regressor: {regressor}, Target: {target}, Regressor shape: {data_regressor.shape}, Target shape: {data_target.shape}")
-    assert data_regressor.shape[0] == data_target.shape[0]
+    '''Wrapper around evaluation.cross_validate that keeps the original interface and results
+    (z-scoring, if any, is done on all data before splitting).'''
+    assert not equalize_ambient_dim, 'equalize_ambient_dim is no longer supported.'
     if regression_method == 'ridge' and not zscore_embeddings:
         print(f'Warning: It is recommended to z-score the embeddings when using ridge regression. Consider setting zscore_embeddings=True for better performance.')
-    if zscore_embeddings:
-        data_regressor = zscore(data_regressor, axis=0)
-        data_target = zscore(data_target, axis=0)
-    if equalize_ambient_dim and regressor != 'dynamicworld' and target != 'dynamicworld':
-        if data_regressor.shape[1] > data_target.shape[1]:
-            pca = PCA(n_components=data_target.shape[1])
-            data_regressor = pca.fit_transform(data_regressor)
-        elif data_target.shape[1] > data_regressor.shape[1]:
-            pca = PCA(n_components=data_regressor.shape[1])
-            data_target = pca.fit_transform(data_target)
-        
-    assert n_splits > 1
+    heads = {'linear': LinearRegression(), 'ridge': Ridge(alpha=1.0)}
+    assert regression_method in heads, f'Regression method {regression_method} not supported.'
+    res = ev.cross_validate(df_all, col_names, [regressor], target, task_type='regression',
+                            head=heads[regression_method], n_splits=n_splits,
+                            scaling='global' if zscore_embeddings else None)
+    df_all = df_all.copy()
+    df_all[f'{regressor}_to_{target}_mse'] = res.mse_per_point
+    return res.score, np.mean(res.mse_per_point), df_all, {'target': res.target, 'predictions': res.predictions, 'residuals': res.target - res.predictions, 'mse_per_point': res.mse_per_point, 'r2_per_split': list(res.score_per_split)}
 
-    rs = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    mse_per_point = np.zeros(len(df_all))
-    r2 = np.zeros(n_splits)
-    Y_pred = np.zeros_like(data_target)
-    var_target = np.var(data_target, axis=0)
-    r2_per_split = []
-    # print(f'Variance of target {target}: {var_target}')
-    for i, (train_index, test_index) in enumerate(rs.split(df_all)):
-        
-        ## All samples x features
-        X_train = data_regressor[train_index]
-        Y_train = data_target[train_index]
-        X_test = data_regressor[test_index]
-        Y_test = data_target[test_index]
-        if regression_method == 'linear':
-            reg = LinearRegression().fit(X_train, Y_train)
-            pred = reg.predict(X_test)
-        elif regression_method == 'ridge':
-            reg = Ridge(alpha=1.0).fit(X_train, Y_train)
-            pred = reg.predict(X_test)
-        elif regression_method == 'truncated_svd':
-            pass
-            # svd = TruncatedSVD(n_components=64).fit(X_train, Y_train)
-            # weights = svd.transform(X_test)
-            # components = svd.components_
-            # X_test_pred = weights @ components
-            # print(pred.shape, Y_pred[test_index].shape)
-        if len(pred.shape) == 1:
-            pred = pred[:, np.newaxis]
-        Y_pred[test_index] = pred
-        mse_per_point[test_index] = np.mean((Y_test - Y_pred[test_index]) ** 2 / var_target, axis=1)
-        r2_per_split.append(r2_score(Y_test, Y_pred[test_index], multioutput='variance_weighted'))
-    
-    r2 = r2_score(data_target, Y_pred, multioutput='variance_weighted')
-    mean_mse = np.mean(mse_per_point)
-    residuals = data_target - Y_pred
-    df_all[f'{regressor}_to_{target}_mse'] = mse_per_point
-    return r2, mean_mse, df_all, {'target': data_target, 'predictions': Y_pred, 'residuals': residuals, 'mse_per_point': mse_per_point, 'r2_per_split': r2_per_split}
-
-def get_accuracy_classification(df_all, col_names, regressor, target: str, n_splits=4, 
+def get_accuracy_classification(df_all, col_names, regressor, target: str, n_splits=4,
                                 zscore_embeddings=False, method='logistic_regression'):
-    
+    '''Wrapper around evaluation.cross_validate that keeps the original interface and results.'''
     assert type(target) == str, 'Target should be a string representing the column name in col_names.'
     assert target in df_all.columns, f'Target {target} not found in df_all.'
-    assert n_splits > 1, 'n_splits should be greater than 1 for classification to work properly.'
-    data_regressor = df_all[col_names[regressor]].values
-    # print(f'nans: {np.isnan(data_regressor).sum()} out of {data_regressor.size} values in regressor {regressor}.')
-    # print(f'infs : {np.isinf(data_regressor).sum()} out of {data_regressor.size} values in regressor {regressor}.')
-    if zscore_embeddings:
-        data_regressor = zscore(data_regressor, axis=0)
-        
-    ## map target to integers
-    unique_classes = df_all[target].unique()
-    class_to_int = {cls: i for i, cls in enumerate(unique_classes)}
-    df_all[f'{target}_int'] = df_all[target].map(class_to_int)
-    data_target = df_all[f'{target}_int'].values
-
-    ## create stratified splits
-    rs = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    accuracies = []
-    mse_per_point = np.zeros(len(df_all))
-    # pred_all = np.zeros((len(df_all), len(unique_classes)))
-    pred_all = np.zeros(len(df_all), dtype=int)
-    for train_index, test_index in rs.split(data_regressor):
-        X_train, X_test = data_regressor[train_index], data_regressor[test_index]
-        y_train, y_test = data_target[train_index], data_target[test_index]
-        y_test_soft = np.zeros((len(y_test), len(unique_classes)))
-        for i_c, cc in enumerate(unique_classes):
-            y_test_soft[:, i_c] = (y_test == cc).astype(float)
-        if method == 'logistic_regression':
-            clf = LogisticRegression(max_iter=1000).fit(X_train, y_train)
-            acc = clf.score(X_test, y_test)
-            accuracies.append(acc)
-            pred = clf.predict(X_test)
-            mse_per_point[test_index] = np.nan
-            pred_all[test_index] = pred
-        else:
-            raise ValueError(f'Method {method} not supported.')
-    df_all[f'{regressor}_to_{target}_mse'] = mse_per_point
-    mean_mse = np.mean(mse_per_point)
-    return np.mean(accuracies), mean_mse, df_all, {'target': data_target, 'predictions': pred_all, 'mse_per_point': mse_per_point, 'accuracy_per_split': accuracies}
+    assert method == 'logistic_regression', f'Method {method} not supported.'
+    res = ev.cross_validate(df_all, col_names, [regressor], target, task_type='classification',
+                            head=LogisticRegression(max_iter=1000), n_splits=n_splits,
+                            scaling='global' if zscore_embeddings else None)
+    df_all[f'{target}_int'] = res.target
+    df_all[f'{regressor}_to_{target}_mse'] = res.mse_per_point
+    return res.score, np.mean(res.mse_per_point), df_all, {'target': res.target, 'predictions': res.predictions, 'mse_per_point': res.mse_per_point, 'accuracy_per_split': list(res.score_per_split)}
 
 
 def get_dim(im):

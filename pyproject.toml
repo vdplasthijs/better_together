@@ -1,0 +1,60 @@
+[project]
+name = "better-together"
+version = "0.1.0"
+description = "Better Together: Evaluating the Complementarity of Earth Embedding Models"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    # Core scientific stack
+    "numpy==2.3.3",
+    "pandas==2.3.3",
+    "scipy==1.16.3",
+    "scikit-learn==1.7.2",
+    "scikit-image==0.25.2",
+    "statsmodels==0.14.6",
+    "tqdm==4.67.1",
+    # Plotting
+    "matplotlib==3.10.6",
+    "seaborn==0.13.2",
+    "plotly==6.3.1",
+    "folium==0.20.0",
+    # Geospatial (wheels bundle GDAL/PROJ/GEOS, replacing the conda system libs)
+    "xarray==2025.4.0",
+    "netcdf4==1.7.2",
+    "rasterio==1.4.3",
+    "rioxarray==0.18.1",
+    "geopandas==1.1.1",
+    "shapely==2.1.1",
+    "pyproj==3.6.1",
+    "pyogrio==0.10.0",
+    "geodatasets==2024.8.0",
+    "utm==0.8.1",
+    # Spatial statistics
+    "libpysal==4.13.0",
+    "esda==2.8.0",
+    "giddy==2.3.6",
+    "splot==1.1.7",
+    "spreg==1.8.3",
+    "mapclassify==2.10.0",
+    "scikit-gstat==1.0.21",
+    # Google Earth Engine
+    "earthengine-api==1.6.11",
+    "geemap==0.36.4",
+    # Jupyter
+    "jupyter==1.1.1",
+    "jupyterlab==4.4.7",
+    "ipykernel==6.30.1",
+    "ipywidgets==8.1.5",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+markers = ["slow: needs the data folder and takes minutes (run with -m slow)"]
+addopts = "-m 'not slow'"
